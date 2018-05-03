@@ -48,47 +48,63 @@ class BUOY(STRUCTURES):
     def update_position_velocity(self, dt):
 
         for connection in self.connections:
-
-            if connection["object_node_condition"] == 1:
-                self.new_rk4_position[:,connection["self_node"]] = connection["object"].global_node_position[:,connection['object_node']]
-                self.new_rk4_velocity[:,connection["self_node"]] = connection["object"].global_node_velocity[:,connection['object_node']]
+            if connection["connect_obj_node_condition"] == 1:
+                self.new_rk4_position[:,connection["self_node"]] = connection["connect_obj"].global_node_position[:,connection['connect_obj_node']]
+                self.new_rk4_velocity[:,connection["self_node"]] = connection["connect_obj"].global_node_velocity[:,connection['connect_obj_node']]
+            
+            elif connection["self_node_condition"] == 1:
+                connection["connect_obj"].global_node_position[:,connection['connect_obj_node']] = self.new_rk4_position[:,connection["self_node"]]
+                connection["connect_obj"].global_node_velocity[:,connection['connect_obj_node']] = self.new_rk4_velocity[:,connection["self_node"]]
 
         self.global_node_position = np.copy(self.new_rk4_position)
         self.global_node_velocity = np.copy(self.new_rk4_velocity)
 
     # =======================================
+    # 計算質點位置、速度
+    # ======================================= 
+    def cal_node_pos_vel(self, global_node_position_temp, global_node_velocity_temp):
+        self.global_node_position = global_node_position_temp
+        self.global_node_velocity = global_node_velocity_temp
+        
+        for connection in self.connections:
+            if connection["connect_obj_node_condition"] == 1:
+                self.global_node_position[:,connection["self_node"]] = connection["connect_obj"].global_node_position[:,connection['connect_obj_node']]
+                self.global_node_velocity[:,connection["self_node"]] = connection["connect_obj"].global_node_velocity[:,connection['connect_obj_node']]
+            
+            elif connection["self_node_condition"] == 1:
+                connection["connect_obj"].global_node_position[:,connection['connect_obj_node']] = self.global_node_position[:,connection["self_node"]]
+                connection["connect_obj"].global_node_velocity[:,connection['connect_obj_node']] = self.global_node_velocity[:,connection["self_node"]]
+
+    # =======================================
     # 計算構件受力
     # =======================================
-    def cal_node_force(self,  present_time, global_node_position_temp, global_node_velocity_temp):
-        
+    def cal_element_force(self, present_time):
+
         self.weight = self.mass*self.OCEAN.gravity 
 
         # 初始化流阻力、慣性力、浮力、重力、附加質量
-        flow_resistance_force =  np.zeros((3,self.num_element))
-        inertial_force =  np.zeros((3,self.num_element))
-        buoyancy_force =  np.zeros((3,self.num_element))
-        gravity_force =  np.zeros((3,self.num_element))
-        connected_force = np.zeros((3,self.num_element))
-        added_mass_element = np.zeros(self.num_element)
+        self.flow_resistance_force =  np.zeros((3,self.num_element))
+        self.inertial_force =  np.zeros((3,self.num_element))
+        self.buoyancy_force =  np.zeros((3,self.num_element))
+        self.gravity_force =  np.zeros((3,self.num_element))
+        self.added_mass_element = np.zeros(self.num_element)
+
+        # 初始化外傳力
+        self.pass_force = np.zeros((3,self.num_node))
 
         
-        # 初始化質點集中受力、質點集中質量
-        self.node_force = np.zeros((3,self.num_node))
-        node_mass = np.zeros(self.num_node)
-        global_node_acc_temp = np.zeros((3,self.num_node))
-
 
         for i in range(self.num_element):
             node_index = self.get_node_index(i)
             # 構件質心處海波流場
             water_velocity, water_acceleration = self.OCEAN.cal_wave_field(
-                                                (global_node_position_temp[0, node_index[0]] + global_node_position_temp[0, node_index[0]])/2,
-                                                (global_node_position_temp[1, node_index[0]] + global_node_position_temp[1, node_index[0]])/2,
-                                                (global_node_position_temp[2, node_index[0]] + global_node_position_temp[2, node_index[0]])/2,
+                                                (self.global_node_position[0, node_index[0]] + self.global_node_position[0, node_index[0]])/2,
+                                                (self.global_node_position[1, node_index[0]] + self.global_node_position[1, node_index[0]])/2,
+                                                (self.global_node_position[2, node_index[0]] + self.global_node_position[2, node_index[0]])/2,
                                                 present_time )
 
             # 構件與海水相對速度
-            relative_velocity  = water_velocity - global_node_velocity_temp[:,i]
+            relative_velocity  = water_velocity - self.global_node_velocity[:,i]
             relative_velocity_abs = np.linalg.norm(relative_velocity)
 
             if relative_velocity_abs == 0:
@@ -98,9 +114,9 @@ class BUOY(STRUCTURES):
                 
             # 構件切線向量
             connection = self.connections[0]
-            element_tang_vecotr =  [ global_node_position_temp[0,i] - connection["object"].global_node_position[0,connection['object_node']-1],
-                                     global_node_position_temp[1,i] - connection["object"].global_node_position[1,connection['object_node']-1],
-                                     global_node_position_temp[2,i] - connection["object"].global_node_position[2,connection['object_node']-1] ]
+            element_tang_vecotr =  [ self.global_node_position[0,i] - connection["connect_obj"].global_node_position[0,connection['connect_obj_node']-1],
+                                     self.global_node_position[1,i] - connection["connect_obj"].global_node_position[1,connection['connect_obj_node']-1],
+                                     self.global_node_position[2,i] - connection["connect_obj"].global_node_position[2,connection['connect_obj_node']-1] ]
 
 
             element_length = np.linalg.norm(element_tang_vecotr)
@@ -120,13 +136,13 @@ class BUOY(STRUCTURES):
 
 
             # 液面至構件質心垂直距離
-            dh = self.OCEAN.eta - global_node_position_temp[2, i] 
+            dh = self.OCEAN.eta - self.global_node_position[2, i] 
 
 	        # 計算浸水深度 面積 表面積
             if (dh > self.height):
                 volume_in_water = ( 0.25*math.pi*self.diameter**2)*self.height
 
-                buoyancy_force[:, i] = np.asarray([   0,
+                self.buoyancy_force[:, i] = np.asarray([   0,
                                                       0,
                                                       self.OCEAN.water_density*volume_in_water*self.OCEAN.gravity])
 
@@ -136,7 +152,7 @@ class BUOY(STRUCTURES):
             elif (dh < 0):
                 volume_in_water = 0
 
-                buoyancy_force[:, i] = np.asarray([ 0 ,0, 0])
+                self.buoyancy_force[:, i] = np.asarray([ 0 ,0, 0])
 
                 area_norm = 0
                 area_tang = 0
@@ -149,9 +165,9 @@ class BUOY(STRUCTURES):
                     bh = dh
                 volume_in_water = ( 0.25*math.pi*self.diameter**2)*self.height
                 
-                buoyancy_force[:, i] = np.asarray([   0,
-                                                      0,
-                                                      self.OCEAN.water_density*volume_in_water*self.OCEAN.gravity])
+                self.buoyancy_force[:, i] = np.asarray([ 0,
+                                                         0,
+                                                         self.OCEAN.water_density*volume_in_water*self.OCEAN.gravity])
 
                 area_norm = bh*self.diameter
                 area_tang = bh*self.diameter*math.pi
@@ -176,48 +192,72 @@ class BUOY(STRUCTURES):
 
             flow_resistance_force_norm = 0.5*self.OCEAN.water_density*cd_norm*area_norm*relative_velocity_abs**2*relative_velocity_unit_norm
             
-            flow_resistance_force[:, i] = 0.5*(flow_resistance_force_tang + flow_resistance_force_norm)
+            self.flow_resistance_force[:, i] = 0.5*(flow_resistance_force_tang + flow_resistance_force_norm)
             
             # 慣性力
-            inertial_force[:, i] = self.OCEAN.water_density*self.intertia_coeff*volume_in_water*water_acceleration
+            self.inertial_force[:, i] = self.OCEAN.water_density*self.intertia_coeff*volume_in_water*water_acceleration
 
             if ( np.linalg.norm(water_acceleration) != 0):
-                added_mass_element[i] = (self.intertia_coeff-1)*self.OCEAN.water_density*volume_in_water
+                self.added_mass_element[i] = (self.intertia_coeff-1)*self.OCEAN.water_density*volume_in_water
             else:
-                added_mass_element[i] = 0
+                self.added_mass_element[i] = 0
             
             # 重力
-            gravity_force[:, i] = np.asarray([   0,
-                                                 0, 
-                                                - self.element_mass[i]*self.OCEAN.gravity])
+            self.gravity_force[:, i] = np.asarray([ 0,
+                                                    0, 
+                                                    - self.element_mass[i]*self.OCEAN.gravity])
             
+       # 計算外傳力
+        for i in range(self.num_node):
+
+
+            self.pass_force[:,i] = (   self.flow_resistance_force[:, i]
+                                     + self.inertial_force[:, i]
+                                     + self.buoyancy_force[:, i]                              
+                                     + self.gravity_force[:, i]        )
+            
+
+
+    # =======================================
+    # 計算回傳速度、加速度
+    # =======================================
+    def cal_vel_acc(self):
+
+        self.node_force = np.zeros((3,self.num_node))
+        node_mass = np.zeros(self.num_node)
+        global_node_acc_temp = np.zeros((3,self.num_node))
+        connected_force = np.zeros((3,self.num_node))
+
         # 連結力
         for connection in self.connections:
-            connected_force[:, connection["self_node"]] = connection["object"].pass_force[:,connection['object_node']]
+            if connection["self_node_condition"] == 1:
+                connected_force[:, connection["self_node"]] += connection["connect_obj"].pass_force[:,connection['connect_obj_node']]
 
 
         # 質點總合力
         for i in range(self.num_node):
 
 
-            self.pass_force[:,i] = (   flow_resistance_force[:, i]
-                                + inertial_force[:, i]
-                                + buoyancy_force[:, i]                              
-                                + gravity_force[:, i] )
+            self.node_force[:,i] = (   self.flow_resistance_force[:, i]
+                                     + self.inertial_force[:, i]
+                                     + self.buoyancy_force[:, i]                              
+                                     + self.gravity_force[:, i]        )
             
-            self.node_force[:,i]  = self.pass_force[:,i] + connected_force[:,i]
 
-            node_mass[i] = (   (self.element_mass[i]) + added_mass_element[i]  )
+            self.node_force[:,i]  = self.node_force[:,i] + connected_force[:,i]
 
+            node_mass[i] = (   (self.element_mass[i]) + self.added_mass_element[i]  )
 
 
             if (node_mass[i] == 0):
                 global_node_acc_temp[:,i] = 0
             else:
                 global_node_acc_temp[:,i] = self.node_force[:,i]/node_mass[i]
+        
+        
+        global_node_velocity_temp = np.copy(self.global_node_velocity)
 
         return global_node_velocity_temp, global_node_acc_temp
-
     # =======================================
     # 質點 構件 關係
     # =======================================

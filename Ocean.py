@@ -134,6 +134,5 @@ if __name__ == "__main__":
     plt.show()
     print ('=============================================')
     oceana.plot_ocean([-5,30], [-15,15], 5, 5, 1, ax)
-    oceana.cal_wave_field(0,1,2,1)
-    print (oceana.eta)
+    print (oceana.cal_wave_field(0,1,-0.5,5))
     plt.show()

@@ -123,7 +123,7 @@ class COLLAR(STRUCTURES):
             self.local_position_vectors[2, i] = self.global_node_position[2, i] - self.global_center_position[2]
             
     # =======================================
-    # 更新質點位置
+    # Runge Kutta 4th 更新質點位置
     # =======================================
     def update_position_velocity(self, dt):
 
@@ -137,55 +137,69 @@ class COLLAR(STRUCTURES):
         # 用 center position 算 global_node_position_temp
         self.global_center_velocity[3:6] = np.dot(self.coordinate_transfer_matrix.T, self.local_center_velocity[3:6])
 
+        for i in range(self.num_node):
+            self.global_node_position[:,i] = np.dot(self.coordinate_transfer_matrix.T, self.local_position_vectors[:,i]) + self.global_center_position
+            self.global_node_velocity[:,i] = self.global_center_velocity[0:3] + np.cross(self.global_center_velocity[3:6], self.local_position_vectors[:, i])
+        
+        for connection in self.connections:
+            if connection["connect_obj_node_condition"] == 1:
+                self.global_node_position[:,connection["self_node"]] = connection["connect_obj"].global_node_position[:,connection['connect_obj_node']]
+                self.global_node_velocity[:,connection["self_node"]] = connection["connect_obj"].global_node_velocity[:,connection['connect_obj_node']]
+            
+            elif connection["self_node_condition"] == 1:
+                connection["connect_obj"].global_node_position[:,connection['connect_obj_node']] = self.global_node_position[:,connection["self_node"]]
+                connection["connect_obj"].global_node_velocity[:,connection['connect_obj_node']] = self.global_node_velocity[:,connection["self_node"]]
+    
+    # =======================================
+    # 計算質點位置、速度
+    # =======================================  
+    def cal_node_pos_vel(self, global_center_position_temp, combine_center_velocity_temp):
+        
+        self.global_center_position = np.copy(global_center_position_temp)
+
+        self.local_center_velocity = np.zeros(6)
+        self.local_center_velocity[3:6] = np.copy(combine_center_velocity_temp[3:6])
+
+        # 用 center position 算 global_node_position_temp
+        self.global_center_velocity = np.zeros(6)
+        self.global_center_velocity[0:3] = np.copy(combine_center_velocity_temp[0:3])
+        self.global_center_velocity[3:6] = np.dot(self.coordinate_transfer_matrix.T, self.local_center_velocity[3:6])
+
+
+        self.global_node_position = np.zeros((3,self.num_node))
+        self.global_node_velocity = np.zeros((3,self.num_node))
 
         for i in range(self.num_node):
             self.global_node_position[:,i] = np.dot(self.coordinate_transfer_matrix.T, self.local_position_vectors[:,i]) + self.global_center_position
             self.global_node_velocity[:,i] = self.global_center_velocity[0:3] + np.cross(self.global_center_velocity[3:6], self.local_position_vectors[:, i])
 
+ 
+
     # =======================================
     # 計算構件受力
     # =======================================
-    def cal_node_force(self,  present_time, global_center_position_temp, combine_center_velocity_temp):
+    def cal_element_force(self,  present_time):
  
         # 初始化流阻力、慣性力、浮力、重力、附加質量
-        flow_resistance_force =  np.zeros((3,self.num_element))
-        inertial_force =  np.zeros((3,self.num_element))
-        buoyancy_force =  np.zeros((3,self.num_element))
-        gravity_force =  np.zeros((3,self.num_element))
-        connected_force = np.zeros((3,self.num_node))
-        added_mass_element = np.zeros(self.num_element)
-        self.node_force = np.zeros((3,self.num_node))
+        self.flow_resistance_force =  np.zeros((3,self.num_element))
+        self.inertial_force =  np.zeros((3,self.num_element))
+        self.buoyancy_force =  np.zeros((3,self.num_element))
+        self.gravity_force =  np.zeros((3,self.num_element))
+        self.added_mass_element = np.zeros(self.num_element)
         self.pass_force = np.zeros((3,self.num_node))
 
-        local_center_velocity_temp = np.zeros(6)
-        local_center_velocity_temp[3:6] = np.copy(combine_center_velocity_temp[3:6])
-
-        # 用 center position 算 global_node_position_temp
-        global_center_velocity_temp = np.zeros(6)
-        global_center_velocity_temp[0:3] = np.copy(combine_center_velocity_temp[0:3])
-        global_center_velocity_temp[3:6] = np.dot(self.coordinate_transfer_matrix.T, local_center_velocity_temp[3:6])
-
-
-        global_node_position_temp = np.zeros((3,self.num_node))
-        global_node_velocity_temp = np.zeros((3,self.num_node))
-
-        for i in range(self.num_node):
-            global_node_position_temp[:,i] = np.dot(self.coordinate_transfer_matrix.T, self.local_position_vectors[:,i]) + global_center_position_temp
-            global_node_velocity_temp[:,i] = global_center_velocity_temp[0:3] + np.cross(global_center_velocity_temp[3:6], self.local_position_vectors[:, i])
-
- 
 
         for i in range(self.num_element):            
             node_index = self.get_node_index(i)
             # 構件質心處海波流場
             water_velocity, water_acceleration = self.OCEAN.cal_wave_field(
-                                                (global_node_position_temp[0, node_index[0]] + global_node_position_temp[0, node_index[1]])/2,
-                                                (global_node_position_temp[1, node_index[0]] + global_node_position_temp[1, node_index[1]])/2,
-                                                (global_node_position_temp[2, node_index[0]] + global_node_position_temp[2, node_index[1]])/2,
+                                                (self.global_node_position[0, node_index[0]] + self.global_node_position[0, node_index[1]])/2,
+                                                (self.global_node_position[1, node_index[0]] + self.global_node_position[1, node_index[1]])/2,
+                                                (self.global_node_position[2, node_index[0]] + self.global_node_position[2, node_index[1]])/2,
                                                 present_time )
 
             # 構件與海水相對速度
-            relative_velocity  = water_velocity - 0.5*(global_node_velocity_temp[:,node_index[0]] + global_node_velocity_temp[:,node_index[1]])
+            relative_velocity  = water_velocity - 0.5*(self.global_node_velocity[:,node_index[0]] + self.global_node_velocity[:,node_index[1]])
             relative_velocity_abs = np.linalg.norm(relative_velocity)
 
             if relative_velocity_abs == 0:
@@ -194,9 +208,9 @@ class COLLAR(STRUCTURES):
                 relative_velocity_unit = relative_velocity / relative_velocity_abs
                 
             # 構件切線向量
-            element_tang_vecotr =  [ global_node_position_temp[0, node_index[1]] - global_node_position_temp[0, node_index[0]],
-                                     global_node_position_temp[1, node_index[1]] - global_node_position_temp[1, node_index[0]],
-                                     global_node_position_temp[2, node_index[1]] - global_node_position_temp[2, node_index[0]] ]
+            element_tang_vecotr =  [ self.global_node_position[0, node_index[1]] - self.global_node_position[0, node_index[0]],
+                                     self.global_node_position[1, node_index[1]] - self.global_node_position[1, node_index[0]],
+                                     self.global_node_position[2, node_index[1]] - self.global_node_position[2, node_index[0]] ]
 
             element_length = np.linalg.norm(element_tang_vecotr)
             element_tang_unitvector = element_tang_vecotr / element_length
@@ -208,44 +222,36 @@ class COLLAR(STRUCTURES):
             relative_velocity_unit_norm = relative_velocity_unit - relative_velocity_unit_tang
 
             # 液面至構件質心垂直距離
-            dh = self.OCEAN.eta - (global_node_position_temp[2, node_index[1]] + global_node_position_temp[2, node_index[0]])/2
+            dh = self.OCEAN.eta - (self.global_node_position[2, node_index[1]] + self.global_node_position[2, node_index[0]])/2
 
 	        # 計算浸水深度 面積 表面積
-            if ( dh > self.tube_diameter/2 ):
-                h = self.tube_diameter
-                area = math.pi*self.tube_diameter**2/4
-                s = math.pi*self.tube_diameter
+            if ( dh > self.frame_diameter/2 ):
+                h = self.frame_diameter
+                area = math.pi*self.frame_diameter**2/4
+                s = math.pi*self.frame_diameter
 
             elif (dh > 0):
-                temp_theta = np.arcsin(dh/(self.tube_diameter/2))
-                h = self.tube_diameter/2+dh
-                area = math.pi*self.tube_diameter**2/8+dh*self.tube_diameter*np.cos(temp_theta)/2+self.tube_diameter**2*temp_theta/4
-                s = math.pi*self.tube_diameter/2+self.tube_diameter*temp_theta
+                temp_theta = np.arcsin(dh/(self.frame_diameter/2))
+                h = self.frame_diameter/2+dh
+                area = math.pi*self.frame_diameter**2/8+dh*self.frame_diameter*np.cos(temp_theta)/2+self.frame_diameter**2*temp_theta/4
+                s = math.pi*self.frame_diameter/2+self.frame_diameter*temp_theta
 
-            elif (dh > -self.tube_diameter/2):
-                temp_theta = np.arcsin(abs(dh)/(self.tube_diameter/2))
-                h = self.tube_diameter/2+dh
-                area = math.pi*self.tube_diameter**2/8-dh*self.tube_diameter*np.cos(temp_theta)/2-self.tube_diameter**2*temp_theta/4
-                s = math.pi*self.tube_diameter/2-self.tube_diameter*temp_theta  
+            elif (dh > -self.frame_diameter/2):
+                temp_theta = np.arcsin(abs(dh)/(self.frame_diameter/2))
+                h = self.frame_diameter/2+dh
+                area = math.pi*self.frame_diameter**2/8-dh*self.frame_diameter*np.cos(temp_theta)/2-self.frame_diameter**2*temp_theta/4
+                s = math.pi*self.frame_diameter/2-self.frame_diameter*temp_theta  
 
             else:
                 h = 0
                 area = 0
                 s = 0
 
-
-            if (self.float_type ==0):
-                # 浸沒體積
-                volume_in_water = area*element_length*2 # 有內框以及外框
-                # 流阻力受力面積
-                area_norm = h*element_length*2      
-                area_tang = s*element_length*2
-            elif (self.float_type ==1):
-                # 浸沒體積
-                volume_in_water = math.pi*self.tube_diameter**2*element_length*2/4 # 有內框以及外框
-                # 流阻力受力面積
-                area_norm = self.tube_diameter*element_length*2      
-                area_tang = math.pi*self.tube_diameter*element_length*2
+            # 浸沒體積
+            volume_in_water = math.pi*self.frame_diameter**2*element_length*2/4 # 有內框以及外框
+            # 流阻力受力面積
+            area_norm = self.frame_diameter*element_length*2      
+            area_tang = math.pi*self.frame_diameter*element_length*2
 
             # 計算流阻力係數  依blevins經驗公式
             afa = np.arccos( np.dot(relative_velocity_unit, relative_velocity_unit_tang) )
@@ -261,30 +267,53 @@ class COLLAR(STRUCTURES):
 
             flow_resistance_force_norm = 0.5*self.OCEAN.water_density*cd_norm*area_norm*relative_velocity_abs**2*relative_velocity_unit_norm
             
-            flow_resistance_force[:, i] = 0.5*(flow_resistance_force_tang + flow_resistance_force_norm)
+            self.flow_resistance_force[:, i] = 0.5*(flow_resistance_force_tang + flow_resistance_force_norm)
             
             # 慣性力
-            inertial_force[:, i] = self.OCEAN.water_density*self.intertia_coeff*volume_in_water*water_acceleration*0.5
+            self.inertial_force[:, i] = self.OCEAN.water_density*self.intertia_coeff*volume_in_water*water_acceleration*0.5
 
             if ( np.linalg.norm(water_acceleration) != 0):
-                added_mass_element[i] = 0.5*(self.intertia_coeff-1)*self.OCEAN.water_density*volume_in_water
+                self.added_mass_element[i] = 0.5*(self.intertia_coeff-1)*self.OCEAN.water_density*volume_in_water
             else:
-                added_mass_element[i] = 0
+                self.added_mass_element[i] = 0
 
             # 浮力
-            buoyancy_force[:, i] = np.asarray([   0,
-                                                  0,
-                                                  self.OCEAN.water_density*volume_in_water*self.OCEAN.gravity])
+            self.buoyancy_force[:, i] = np.asarray([ 0,
+                                                     0,
+                                                     self.OCEAN.water_density*volume_in_water*self.OCEAN.gravity])
 
             
             # 重力
-            gravity_force[:, i] = np.asarray([   0,
-                                                 0, 
-                                                - self.element_mass*self.OCEAN.gravity])
+            self.gravity_force[:, i] = np.asarray([ 0,
+                                                    0, 
+                                                    - self.element_mass*self.OCEAN.gravity])
             
+        # 質點總合力
+        for i in range(self.num_node):
+            
+            node_mass = 0
+            element_index = self.get_element_index(i)
+
+            for index in element_index:
+
+                self.pass_force[:,i] += (   
+                                               self.flow_resistance_force[:, index]
+                                            +  self.inertial_force[:, index] 
+                                            +  self.buoyancy_force[:, index]                
+                                            +  self.gravity_force[:, index]
+                                        )
+    # =======================================
+    # 計算回傳速度、加速度
+    # =======================================
+    def cal_vel_acc(self):
+
+        connected_force = np.zeros((3,self.num_node))
+        self.node_force = np.zeros((3,self.num_node))
+
         # 連結力
         for connection in self.connections:
-            connected_force[:, connection["self_node"]] = connection["object"].pass_force[:,connection['object_node']]
+            if connection["self_node_condition"] == 1:
+                connected_force[:, connection["self_node"]] += connection["connect_obj"].pass_force[:,connection['connect_obj_node']]
 
 
         moment_global_axes = np.zeros(3)
@@ -294,24 +323,23 @@ class COLLAR(STRUCTURES):
 
         # 質點總合力
         for i in range(self.num_node):
-
+            
             node_mass = 0
             element_index = self.get_element_index(i)
 
             for index in element_index:
 
-                self.pass_force[:,i] += (   
-                                            flow_resistance_force[:, index]
-                                            +  inertial_force[:, index] 
-                                            +  buoyancy_force[:, index]                
-                                            +  gravity_force[:, index]
+                self.node_force[:,i] += (   
+                                               self.flow_resistance_force[:, index]
+                                            +  self.inertial_force[:, index] 
+                                            +  self.buoyancy_force[:, index]                
+                                            +  self.gravity_force[:, index]
                                         )
                 
-                node_mass += added_mass_element[index]
+                node_mass += self.added_mass_element[index]
 
-            self.pass_force[:,i] = self.pass_force[:,i]/len(element_index)
+            self.node_force[:,i] = self.node_force[:,i]/len(element_index) + connected_force[:, i]
 
-            self.node_force[:,i] = self.pass_force[:,i] + connected_force[:, i]
 
             node_mass =  node_mass/len(element_index) + (self.element_mass)/2*2
 
@@ -329,21 +357,24 @@ class COLLAR(STRUCTURES):
         local_inertia = self.global_inertia
 
         # Xg, Yg, Zg
-        global_center_acc_temp = np.cross( global_center_velocity_temp[0:3], local_center_velocity_temp[3:6]) + total_force/total_mass
+        global_center_acc_temp = np.cross( self.global_center_velocity[0:3], self.local_center_velocity[3:6]) + total_force/total_mass
 
 
         local_center_acc_temp = np.zeros(6)
         # local
-        local_center_acc_temp[3] = ( -( local_inertia[2] -local_inertia[1] )*local_center_velocity_temp[4]*local_center_velocity_temp[5]/local_inertia[0]
+        local_center_acc_temp[3] = ( -( local_inertia[2] -local_inertia[1] )*self.local_center_velocity[4]*self.local_center_velocity[5]/local_inertia[0]
                                      + moment_local_axes[0]/local_inertia[0] )
 
-        local_center_acc_temp[4] = ( -( local_inertia[0] -local_inertia[2] )*local_center_velocity_temp[3]*local_center_velocity_temp[5]/local_inertia[1]
+        local_center_acc_temp[4] = ( -( local_inertia[0] -local_inertia[2] )*self.local_center_velocity[3]*self.local_center_velocity[5]/local_inertia[1]
                                      + moment_local_axes[1]/local_inertia[1] )
 
-        local_center_acc_temp[5] = ( -( local_inertia[1] -local_inertia[0] )*local_center_velocity_temp[3]*local_center_velocity_temp[4]/local_inertia[2]
+        local_center_acc_temp[5] = ( -( local_inertia[1] -local_inertia[0] )*self.local_center_velocity[3]*self.local_center_velocity[4]/local_inertia[2]
                                      + moment_local_axes[2]/local_inertia[2] )
 
         combine_center_acc_temp = np.hstack((global_center_acc_temp[0:3], local_center_acc_temp[3:6]))
+
+
+        global_center_velocity_temp = np.copy(self.global_center_velocity)
 
         return global_center_velocity_temp[0:3], combine_center_acc_temp
 

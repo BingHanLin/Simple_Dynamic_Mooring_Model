@@ -10,15 +10,16 @@ from Collar import COLLAR
 from CableLine import CABLELINE
 from BUOY import BUOY
 from FRAME import FRAME
+from Anchor import ANCHOR
 from Structures import connect_objects, STRUCTURES
 
 # ============================================================================
 # 參數
 # ============================================================================
-dt = 0.001
+dt = 0.0005
 display_time = 0.01
 save_time = 0.05
-total_time = 15
+total_time = 10
 
 dir_name = 'OUTPUTFRAME'
 
@@ -47,6 +48,11 @@ SUBCABLE2 = CABLELINE("SubRope2", "Params.json", ocean, RECFRAME.corner_position
 SUBCABLE3 = CABLELINE("SubRope3", "Params.json", ocean, RECFRAME.corner_position[:,2],  BUOY3.global_node_position[:,0], "SUBCABLE")
 SUBCABLE4 = CABLELINE("SubRope4", "Params.json", ocean, RECFRAME.corner_position[:,3],  BUOY4.global_node_position[:,0], "SUBCABLE")
 
+ANCHOR1 = ANCHOR("ANCHOR1", ocean, MAINCABLE1.global_node_position[:,0])
+ANCHOR2 = ANCHOR("ANCHOR2", ocean, MAINCABLE2.global_node_position[:,0])
+ANCHOR3 = ANCHOR("ANCHOR3", ocean, MAINCABLE3.global_node_position[:,0])
+ANCHOR4 = ANCHOR("ANCHOR4", ocean, MAINCABLE4.global_node_position[:,0])
+
 # 建立物件連結 及 錨碇點 (使用節點編號)
 connect_objects([RECFRAME, MAINCABLE1, SUBCABLE1], [ RECFRAME.corner_index[0], -1, 0], [1, 0, 0])
 connect_objects([RECFRAME, MAINCABLE2, SUBCABLE2], [ RECFRAME.corner_index[1], -1, 0], [1, 0, 0])
@@ -58,10 +64,11 @@ connect_objects([BUOY2, SUBCABLE2], [0, -1], [1, 0])
 connect_objects([BUOY3, SUBCABLE3], [0, -1], [1, 0])
 connect_objects([BUOY4, SUBCABLE4], [0, -1], [1, 0])
 
-MAINCABLE1.add_anchor(0)
-MAINCABLE2.add_anchor(0)
-MAINCABLE3.add_anchor(0)
-MAINCABLE4.add_anchor(0)
+connect_objects([ANCHOR1, MAINCABLE1], [0, 0], [1, 0])
+connect_objects([ANCHOR2, MAINCABLE2], [0, 0], [1, 0])
+connect_objects([ANCHOR3, MAINCABLE3], [0, 0], [1, 0])
+connect_objects([ANCHOR4, MAINCABLE4], [0, 0], [1, 0])
+
 
 # ============================================================================
 # Create folder for output data
@@ -111,14 +118,8 @@ for time_step in range( int(total_time/dt) ):
 # ============================================================================
 # 繪出結果
 # ============================================================================
-# for i in range(RECFRAME.num_node):
-
-#     print (i , RECFRAME.get_element_index(i))
-
-
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
-# ocean.plot_ocean([-10,130], [-30,50], 50, 50, 0, ax)
 
 for obj in STRUCTURES.getinstances():
     obj.plot_element(ax)
