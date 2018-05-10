@@ -4,16 +4,16 @@ import numpy as np
 
 from Structures import STRUCTURES
 
-class BUOY(STRUCTURES):
+class WEIGHTING(STRUCTURES):
     def __init__(self, name, filename, OCEAN, start_node):
 
         with open(filename, 'r') as load_f:
             params_dict = json.load(load_f)
 
-        self.mass      = params_dict["BUOY"]["Mass"]
-        self.diameter  = params_dict["BUOY"]["Diameter"]
-        self.height = params_dict["BUOY"]["Height"]
-        self.intertia_coeff = params_dict["BUOY"]["InertiaCoefficient"]
+        self.mass      = params_dict["WEIGHTING"]["Mass"]
+        self.diameter  = params_dict["WEIGHTING"]["Diameter"]
+        self.height = params_dict["WEIGHTING"]["Height"]
+        self.intertia_coeff = params_dict["WEIGHTING"]["InertiaCoefficient"]
 
         self.__cal_const_var()
         self.__init_element( np.asarray(start_node) )
@@ -21,7 +21,7 @@ class BUOY(STRUCTURES):
         super().__init__(OCEAN, name, 1)
 
 
-        print("BUOY is built.")
+        print("WEIGHTING is built.")
 
     # =======================================
     # 計算浮子相關常數

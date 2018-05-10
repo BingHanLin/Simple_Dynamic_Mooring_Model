@@ -173,7 +173,6 @@ class COLLAR(STRUCTURES):
             self.global_node_position[:,i] = np.dot(self.coordinate_transfer_matrix.T, self.local_position_vectors[:,i]) + self.global_center_position
             self.global_node_velocity[:,i] = self.global_center_velocity[0:3] + np.cross(self.global_center_velocity[3:6], self.local_position_vectors[:, i])
 
- 
 
     # =======================================
     # 計算構件受力

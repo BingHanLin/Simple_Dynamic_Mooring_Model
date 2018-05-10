@@ -116,7 +116,7 @@ class STRUCTURES():
                                   'connect_obj_node_condition': connect_obj_node_condition,
                                   'self_node': self_node,
                                   'self_node_condition':self_node_condition})
-
+    
     # =======================================
     # 繪出構件
     # ======================================= 
@@ -228,7 +228,7 @@ def axisEqual3D(ax):
         getattr(ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
 
 
-def connect_objects(objects, object_nodes, object_node_conditions):
+def connect_objects(objects, object_nodes, object_node_conditions, judge = True):
     '''
     Parameters
     ----------
@@ -239,7 +239,7 @@ def connect_objects(objects, object_nodes, object_node_conditions):
     object_node_conditions : priority index of the objects, 1: leader, 0: follower
     '''
 
-    if 1 not in object_node_conditions:
+    if 1 not in object_node_conditions and judge == True:
         raise ValueError("At least one node condition should be 1")
 
     print ('============================================')
@@ -256,4 +256,69 @@ def connect_objects(objects, object_nodes, object_node_conditions):
 
     print ('============================================')
 
+    for object1, object1_node, object1_node_condition in zip(objects, object_nodes, object_node_conditions):
+        
+        for object2, object2_node, object2_node_condition in zip(objects, object_nodes, object_node_conditions):
+            
+            if object1 != object2:
+                obj_connect_to_obj2_same_node_data = [ [ obj_connect_to_obj2['connect_obj'], obj_connect_to_obj2['connect_obj_node'], obj_connect_to_obj2['connect_obj_node_condition'] ]
+                                                          for obj_connect_to_obj2 in object2.connections  
+                                                                # 若連結至同一點
+                                                              if ( obj_connect_to_obj2['self_node'] == object2_node and 
+                                                                # 且不是相同物件
+                                                                   obj_connect_to_obj2['connect_obj'] != object1 ) ]
+
+                obj_connect_to_obj2_same_node = []
+                connect_node = {}
+                node_condition = {}
+
+                for i in range(len(obj_connect_to_obj2_same_node_data)):
+                    obj_connect_to_obj2_same_node.append(obj_connect_to_obj2_same_node_data[i][0])
+                    connect_node[obj_connect_to_obj2_same_node_data[i][0].name] = obj_connect_to_obj2_same_node_data[i][1]
+                    node_condition[obj_connect_to_obj2_same_node_data[i][0].name] = obj_connect_to_obj2_same_node_data[i][2]
+                
+
+                obj_connect_to_obj2_same_node = set(obj_connect_to_obj2_same_node)
+                obj_connect_to_obj1 = set([ obj['connect_obj'] for obj in object1.connections ])
+
+
+                add_objs = list(obj_connect_to_obj2_same_node - obj_connect_to_obj1)
+  
+                for add_obj in add_objs:
+                    obj_connect_to_obj1 = set([ obj['connect_obj'] for obj in object1.connections ])
+                    new_objs = list(obj_connect_to_obj2_same_node - obj_connect_to_obj1)
+
+                    if add_obj in new_objs:
+                        connect_objects( [object1, add_obj], 
+                                        [object1_node, connect_node[add_obj.name]], 
+                                        [object1_node_condition, node_condition[add_obj.name]],
+                                        judge = False )
+                    else:
+                        pass
+
+def auto_connect_objects(objects, object_node_conditions):
+    '''
+    Parameters
+    ----------
+    objects : name of the object
     
+    object_node_conditions : priority index of the objects, 1: leader, 0: follower
+    '''
+    if 1 not in object_node_conditions:
+        raise ValueError("At least one node condition should be 1")
+    elif len(objects) > 2:
+        raise ValueError("At most accept 2 input object")
+
+    object1_node_condition = object_node_conditions[0]
+    object2_node_condition = object_node_conditions[1]
+
+    for object1_node_index in range(objects[0].num_node):
+        for object2_node_index in range(objects[1].num_node):
+            
+            if (objects[0].global_node_position[0,object1_node_index] == objects[1].global_node_position[0,object2_node_index] and
+                objects[0].global_node_position[1,object1_node_index] == objects[1].global_node_position[1,object2_node_index] and
+                objects[0].global_node_position[2,object1_node_index] == objects[1].global_node_position[2,object2_node_index]):
+
+                connect_objects( [objects[0], objects[1]],
+                                 [object1_node_index, object2_node_index],
+                                 [object1_node_condition, object2_node_condition] )

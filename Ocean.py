@@ -66,12 +66,15 @@ class OCEAN:
     def cal_wave_field(self, xp, yp, zp, time, reduction = 1):
         
         phase = self.__kx*xp + self.__ky*yp - self.__sigma*time
+        
+        if  (self.__kx*xp < self.__sigma*time):
+            self.eta = 0.5*self.wave_height*math.sin(phase)
+        else:
+            self.eta = 0
 
-        self.eta = 0.5*self.wave_height*math.sin(phase)
-
-        # 用這個? 
-        # if ( (self.__kx*xp < self.__sigma*time) and (self.eta > zp) ):
-        if ( (self.eta > zp) ):
+ 
+        if ( (self.__kx*xp < self.__sigma*time) and (self.eta > zp) ):
+        # if ( (self.eta > zp) ):
 
             A = 0.5*self.wave_height*self.gravity/(self.__sigmae*math.cosh(self.__wk*self.water_depth))
 
@@ -107,14 +110,15 @@ class OCEAN:
 
 
         eta = np.zeros((ny,nx))
-
+        water_depth = np.zeros((ny,nx))
         for i in range(ny):
             for j in range(nx):
                 self.cal_wave_field(xv[i,j], yv[i,j], 0, time, 0)
                 eta[i,j] = self.eta
+                water_depth[i,j] = -self.water_depth
 
-        ax.plot_surface(xv,yv,eta, linewidth=0, alpha=0.8,)
-        ax.plot_surface(xv,yv,-self.water_depth, linewidth=0)
+        ax.plot_surface(xv,yv, eta, linewidth=0, alpha=0.8,)
+        ax.plot_surface(xv,yv, water_depth, linewidth=0)
 
 
 
@@ -128,11 +132,10 @@ if __name__ == "__main__":
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
-    oceana.plot_ocean([-5,30], [-15,15], 5, 5, 0, ax)
-    oceana.cal_wave_field(0,1,2,0)
+    oceana.plot_ocean([-10,130], [-10,30], 20, 10, 5, ax)
     print (oceana.eta)
     plt.show()
-    print ('=============================================')
-    oceana.plot_ocean([-5,30], [-15,15], 5, 5, 1, ax)
-    print (oceana.cal_wave_field(0,1,-0.5,5))
-    plt.show()
+    # print ('=============================================')
+    # oceana.plot_ocean([-5,30], [-15,15], 5, 5, 1, ax)
+    # print (oceana.cal_wave_field(0,1,-0.5,5))
+    # plt.show()

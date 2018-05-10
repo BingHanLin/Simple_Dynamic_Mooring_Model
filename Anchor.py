@@ -115,24 +115,17 @@ class ANCHOR(STRUCTURES):
 
     def get_node_index(self, element_number):
 
-        node_index = [element_number, element_number+1]
+
+        node_index = [element_number]
 
         return node_index
 
-
     def get_element_index(self, node_number):
 
-        if node_number  == 0:
-            element_index = [0]
-
-        elif node_number == self.num_node-1:
-            element_index = [-1]
-
-        else:
-            element_index = [node_number-1, node_number]
+        element_index = [node_number]
 
         return element_index
-
+        
 
 if __name__ == "__main__":
      pass

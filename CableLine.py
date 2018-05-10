@@ -244,14 +244,13 @@ class CABLELINE(STRUCTURES):
                 sign *= -1
 
                 self.pass_force[:, i] += (   
-                                              self.flow_resistance_force[:, index]
-                                            + self.inertial_force[:, index]
-                                            + self.buoyancy_force[:, index]
-                                            + self.tension_force[:, index]*sign                                     
-                                            + self.gravity_force[:, index] )
-            
-            
-            self.pass_force[:, i] = self.pass_force[:, i]/len(element_index)
+                                              self.flow_resistance_force[:, index]/2
+                                            + self.inertial_force[:, index]/2
+                                            + self.buoyancy_force[:, index]/2                                  
+                                            + self.gravity_force[:, index]/2
+                                            + self.tension_force[:, index]*sign   
+                                             )
+        
 
 
     # =======================================
@@ -273,27 +272,14 @@ class CABLELINE(STRUCTURES):
 
         # 質點總合力及加速度 (注意張力方向)
         for i in range(self.num_node):
-            if i == 0:
-                sign = -1
-            else:
-                sign = 1
 
             element_index = self.get_element_index(i)
 
             for index in element_index:
-                sign *= -1
-                self.node_force[:, i] += (   
-                                              self.flow_resistance_force[:, index]
-                                            + self.inertial_force[:, index]
-                                            + self.buoyancy_force[:, index]
-                                            + self.tension_force[:, index]*sign                                     
-                                            + self.gravity_force[:, index] )
-            
-                node_mass[i] += ( self.element_mass[index] + self.added_mass_element[index] )
 
-            self.node_force[:, i] = self.node_force[:, i]/len(element_index) + connected_force[:,i]
+                node_mass[i] += ( self.element_mass[index] + self.added_mass_element[index] )/2
 
-            node_mass[i] = node_mass[i]/len(element_index)
+            self.node_force[:, i] = self.pass_force[:, i] + connected_force[:,i]
 
 
             if (node_mass[i] == 0):

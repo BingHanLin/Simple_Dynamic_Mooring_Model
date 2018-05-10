@@ -1,0 +1,133 @@
+{
+    "OCEAN":{
+                "comment":
+                [
+                "WavePeriod (sec)",
+                "WaveHeight (m)",
+                "WaterDepth (m)",
+                "Gravity aceleration (m/s^2)",
+                "Incident wave angle",
+                "Incident current angle",
+                "Incident current velocity"
+                ],
+                
+                "WavePeriod": 8.5,
+                "WaveHeight": 3.0,
+                "WaterDepth": 20.0,
+                "Gravity": 9.81,
+                "WaterDensity": 1000,
+                "WaterViscosity": 0.000001,
+                "InWaveAngle": 0,
+                "InCurrentAngle": 0,
+                "InCurrentVel": 1.0
+            },
+
+    "COLLAR":{
+                "comment":
+                [
+                "FloatingTyoe 0:floating, 1:sinking",
+                "Outter circumference of collar (m)",
+                "Inner circumference of collar (m)",
+                "Diameter of collar tube (m)",
+                "Thickness of collar tube (m)",
+                "Density of material (kg/m^3)",
+                "Inertia coefficient Cm = 1 + Ca",
+                "Number of Elements",
+                "Other mass of equipment (kg)"
+                ],
+
+                "FloatingType": 0,
+                "OutterCircumference": 36.0,
+                "InnerCircumference": 32.0,
+                "TubeDiameter": 0.2,
+                "TubeThickness": 0.015,
+                "MaterialDensity": 1000,
+                "InertiaCoefficient": 2,
+                "Elements": 20,
+                "OtherMass": 457.0247
+            },
+
+    "FRAME":{
+        "comment":[
+                "NAN"
+            ],
+
+            "TubeDiameter": 0.05,
+            "Length": 30,
+            "Width": 20,    
+            "MaterialDensity": 7850,
+            "InertiaCoefficient": 2,
+            "ElementLength": 5,
+            "MomentInertiaX":123307.9452,
+            "MomentInertiaY":208081.8594,
+            "MomentInertiaZ":331389.2266
+
+            },
+
+    "CABLE": {
+        "comment": [
+            "Density of material (kg/m^3)",
+            "Inertia coefficient Cm = 1 + Ca",
+            "Chain mass per meter (kg)",
+            "Number of Elements"
+        ],
+
+            "InertiaCoefficient": 1,
+            "ClCable": 589116053.8,
+            "MaterialDensity": 910,
+            "MassPerMCable": 1.24,
+            "DiameterCable": 0.05,
+            "Elements": 12
+
+    },
+
+    "SUBCABLE": {
+        "comment": [
+            "NAN"
+        ],
+
+        "InertiaCoefficient": 1,
+        "ClCable": 688407585.8,
+        "MaterialDensity": 1140,
+        "MassPerMCable": 0.905,
+        "DiameterCable": 0.038,
+        "Elements": 2
+
+    },
+
+    "BUOY": {
+        "comment": [
+            "NAN"
+        ],
+
+            "Mass": 80,
+            "Diameter": 1.1,
+            "Height":1.3,
+            "InertiaCoefficient":1.5
+    },
+    
+
+    "NET": {
+        "comment": [
+            "NAN"
+        ],
+
+        "InertiaCoefficient": 2,
+        "ClCable": 35770000,
+        "MaterialDensity": 1140,
+        "MassPerMCable": 0.905,
+        "DiameterCable": 0.0021,
+        "lambda": 0.0302
+    },
+
+    "WEIGHTING": {
+        "comment": [
+            "NAN"
+        ],
+
+            "Mass": 1250,
+            "Diameter": 1.1,
+            "Height":1.3,
+            "InertiaCoefficient":1.5
+    }
+}
