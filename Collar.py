@@ -26,7 +26,7 @@ class COLLAR(STRUCTURES):
 
         self.circum_out     = params_dict["COLLAR"]["OutterCircumference"]
         self.circum_in      = params_dict["COLLAR"]["InnerCircumference"]
-        self.tube_diameter  = params_dict["COLLAR"]["TubeDiameter"]
+        self.element_diameter  = params_dict["COLLAR"]["TubeDiameter"]
         self.tube_thickness = params_dict["COLLAR"]["TubeThickness"]
         
         self.density        = params_dict["COLLAR"]["MaterialDensity"]
@@ -58,14 +58,14 @@ class COLLAR(STRUCTURES):
         # total mass
         if (self.float_type == 0):  # floating
             total_mass = (0.25 * math.pi*
-                (self.tube_diameter**2 - (self.tube_diameter - self.tube_thickness * 2)**2)*
+                (self.element_diameter**2 - (self.element_diameter - self.tube_thickness * 2)**2)*
                 (self.circum_out + self.circum_in) * self.density + self.other_mass)
 
         elif (self.float_type == 1):  # sinking 
             total_mass = (0.25 * math.pi * 
-                (self.tube_diameter**2 - (self.tube_diameter - self.tube_thickness * 2)**2) *
+                (self.element_diameter**2 - (self.element_diameter - self.tube_thickness * 2)**2) *
                 (self.circum_out + self.circum_in) * self.density + self.OCEAN.water_density *
-                (0.25 * math.pi * (self.tube_diameter - self.tube_thickness * 2)**2 *
+                (0.25 * math.pi * (self.element_diameter - self.tube_thickness * 2)**2 *
                 (self.circum_out + self.circum_in)))
 
 
@@ -87,6 +87,7 @@ class COLLAR(STRUCTURES):
         # create coordinate transformation matrix
         self.coordinate_transfer_matrix = np.zeros((3,3))
 
+        self.func = np.vectorize(self.cal_element_under_water)
     # =======================================
     # 計算初始浮框構件(兩端)質點位置、速度等
     # =======================================
@@ -95,7 +96,7 @@ class COLLAR(STRUCTURES):
         # global position and velocity of nodes
         self.global_node_position = np.zeros((3,self.num_node))
         self.global_node_velocity = np.zeros((3,self.num_node))
-        self.pass_force = np.zeros((3,self.num_node))
+        self.node_mass = np.zeros(self.num_node)
 
         for i in range(self.num_node):
             self.global_node_position[0, i] = (  start_node[0]
@@ -116,6 +117,12 @@ class COLLAR(STRUCTURES):
 
         # local position vectors of nodes
         self.local_position_vectors = np.zeros((3,self.num_node))
+        
+        # 初始化外傳力
+        self.pass_force = np.zeros((3,self.num_node))
+        # 初始化浮力、重力
+        self.buoyancy_force =  np.zeros((3,self.num_element))
+        self.gravity_force =  np.zeros((3,self.num_element))
 
         for i in range(self.num_node):
             self.local_position_vectors[0, i] = self.global_node_position[0, i] - self.global_center_position[0]
@@ -173,127 +180,118 @@ class COLLAR(STRUCTURES):
             self.global_node_position[:,i] = np.dot(self.coordinate_transfer_matrix.T, self.local_position_vectors[:,i]) + self.global_center_position
             self.global_node_velocity[:,i] = self.global_center_velocity[0:3] + np.cross(self.global_center_velocity[3:6], self.local_position_vectors[:, i])
 
+    def cal_element_under_water(self,  delta_h):
+        # 計算浸水深度 面積 表面積
+        if ( delta_h > self.element_diameter/2 ):
+            under_water_height = self.element_diameter
+            section_area = math.pi*self.element_diameter**2/4
+            skin_surface = math.pi*self.element_diameter
 
+        elif (delta_h > 0):
+            temp_theta = math.arcsin(delta_h/(self.element_diameter/2))
+            under_water_height = self.element_diameter/2+delta_h
+            section_area = math.pi*self.element_diameter**2/8+delta_h*self.element_diameter*math.cos(temp_theta)/2+self.element_diameter**2*temp_theta/4
+            skin_surface = math.pi*self.element_diameter/2+self.element_diameter*temp_theta
+
+        elif (delta_h > -self.element_diameter/2):
+            temp_theta = math.arcsin(abs(delta_h)/(self.element_diameter/2))
+            under_water_height = self.element_diameter/2+delta_h
+            section_area = math.pi*self.element_diameter**2/8-delta_h*self.element_diameter*math.cos(temp_theta)/2-self.element_diameter**2*temp_theta/4
+            skin_surface = math.pi*self.element_diameter/2-self.element_diameter*temp_theta  
+
+        else:
+            under_water_height = 0
+            section_area = 0
+            skin_surface = 0
+
+        return under_water_height, section_area, skin_surface
     # =======================================
     # 計算構件受力
     # =======================================
     def cal_element_force(self,  present_time):
  
-        # 初始化流阻力、慣性力、浮力、重力、附加質量
-        self.flow_resistance_force =  np.zeros((3,self.num_element))
-        self.inertial_force =  np.zeros((3,self.num_element))
-        self.buoyancy_force =  np.zeros((3,self.num_element))
-        self.gravity_force =  np.zeros((3,self.num_element))
-        self.added_mass_element = np.zeros(self.num_element)
-        self.pass_force = np.zeros((3,self.num_node))
+        # 迭代構件
+        node_index = np.asarray(list( map(self.get_node_index, range(self.num_element))))
+
+        center_position = 0.5*( self.global_node_position[:,node_index[:,0]] + self.global_node_position[:,node_index[:,1]] )
+
+        water_velocity, water_acceleration = self.OCEAN.cal_wave_field(center_position, present_time)
+
+        relative_velocity = water_velocity - 0.5*( self.global_node_velocity[:,node_index[:,0]] + self.global_node_velocity[:,node_index[:,1]] )
+
+        # 構件切線向量
+        element_tang_vecotr = self.global_node_position[:,node_index[:,1]] - self.global_node_position[:,node_index[:,0]]
+
+        relative_velocity_abs = np.sum(np.abs(relative_velocity)**2,axis=0)**(1./2)
+        relative_velocity_unit = np.where(relative_velocity_abs != 0, relative_velocity / relative_velocity_abs, 0) 
+
+        element_length = np.sum(np.abs(element_tang_vecotr)**2,axis=0)**(1./2)
+        element_tang_unitvector  = np.where(element_length != 0, element_tang_vecotr / element_length, 0) 
+
+        # 構件單位切線相對速度
+        relative_velocity_tang  = np.sum(element_tang_unitvector*relative_velocity,axis=0)*element_tang_unitvector
+        relative_velocity_tang_abs = np.sum(np.abs(relative_velocity_tang)**2,axis=0)**(1./2)
+        relative_velocity_unit_tang = np.where(relative_velocity_tang_abs != 0, relative_velocity_tang / relative_velocity_tang_abs, 0) 
+        
+        # 構件單位法線相對速度
+        relative_velocity_norm  = relative_velocity - relative_velocity_tang
+        relative_velocity_norm_abs = np.sum(np.abs(relative_velocity_norm)**2,axis=0)**(1./2)
+        relative_velocity_unit_norm = np.where(relative_velocity_norm_abs != 0, relative_velocity_norm / relative_velocity_norm_abs, 0) 
+        # 液面至構件質心垂直距離
+        delta_h = self.OCEAN.eta - center_position[2,:]
+        
+        # 液面下構件幾何
+        under_water_height, section_area, skin_surface  = self.func(delta_h)
+        
+        # 浸沒體積
+        volume_in_water = section_area*element_length
+
+        # 流阻力受力面積
+        area_norm = under_water_height*element_length
+        area_tang = skin_surface*element_length
+
+        # 計算流阻力係數  依blevins經驗公式
+        afa = np.arccos( np.einsum('ij,ij->j', relative_velocity_unit, relative_velocity_unit_tang) )
+        cd_norm = 1.2*(np.sin(afa))**2
+        cd_tang = 0.083*np.cos(afa)-0.035*(np.cos(afa))**2
+
+        afa = np.where(afa > math.pi/2, math.pi - afa, afa  )
+
+        # if(afa > math.pi/2 ):  #?????????????????????????????
+        #     element_tang_unitvector = -element_tang_unitvector
+
+        water_acceleration_abs = np.sum(np.abs(water_acceleration)**2,axis=0)**(1./2)
+        judge_water_acceleration = np.where( water_acceleration_abs==0, 1, 0)
+
+        # =============================流阻力 (計算切線及法線方向流阻力分量) ===========================================
+        self.flow_resistance_force = ( 0.5*self.OCEAN.water_density*cd_tang*area_tang*relative_velocity_abs**2*relative_velocity_unit_tang + 
+                                       0.5*self.OCEAN.water_density*cd_norm*area_norm*relative_velocity_abs**2*relative_velocity_unit_norm )
+
+        # =========================================== 慣性力 ===========================================
+        self.inertial_force = self.OCEAN.water_density*self.intertia_coeff*volume_in_water*water_acceleration
+
+        # ===========================================  附加質量 =========================================== 
+        self.added_mass_element = (self.intertia_coeff-1)*self.OCEAN.water_density*volume_in_water*judge_water_acceleration
+
+        # ===========================================  浮力 =========================================== 
+        self.buoyancy_force[2, :] = self.OCEAN.water_density*volume_in_water*self.OCEAN.gravity
+
+        # ===========================================  重力 =========================================== 
+        self.gravity_force[2, :] = -self.element_mass*self.OCEAN.gravity
 
 
-        for i in range(self.num_element):            
-            node_index = self.get_node_index(i)
-            # 構件質心處海波流場
-            water_velocity, water_acceleration = self.OCEAN.cal_wave_field(
-                                                (self.global_node_position[0, node_index[0]] + self.global_node_position[0, node_index[1]])/2,
-                                                (self.global_node_position[1, node_index[0]] + self.global_node_position[1, node_index[1]])/2,
-                                                (self.global_node_position[2, node_index[0]] + self.global_node_position[2, node_index[1]])/2,
-                                                present_time )
+        # 計算外傳力 (注意張力方向)
+        self.node_mass.fill(0)
+        self.pass_force.fill(0)
 
-            # 構件與海水相對速度
-            relative_velocity  = water_velocity - 0.5*(self.global_node_velocity[:,node_index[0]] + self.global_node_velocity[:,node_index[1]])
-            relative_velocity_abs = np.linalg.norm(relative_velocity)
-
-            if relative_velocity_abs == 0:
-                relative_velocity_unit = np.zeros(3)
-            else:
-                relative_velocity_unit = relative_velocity / relative_velocity_abs
-                
-            # 構件切線向量
-            element_tang_vecotr =  [ self.global_node_position[0, node_index[1]] - self.global_node_position[0, node_index[0]],
-                                     self.global_node_position[1, node_index[1]] - self.global_node_position[1, node_index[0]],
-                                     self.global_node_position[2, node_index[1]] - self.global_node_position[2, node_index[0]] ]
-
-            element_length = np.linalg.norm(element_tang_vecotr)
-            element_tang_unitvector = element_tang_vecotr / element_length
-
-            # 構件單位切線相對速度
-            relative_velocity_unit_tang  = np.dot(element_tang_unitvector,relative_velocity_unit)*element_tang_unitvector
-
-            # 構件單位法線相對速度
-            relative_velocity_unit_norm = relative_velocity_unit - relative_velocity_unit_tang
-
-            # 液面至構件質心垂直距離
-            dh = self.OCEAN.eta - (self.global_node_position[2, node_index[1]] + self.global_node_position[2, node_index[0]])/2
-
-	        # 計算浸水深度 面積 表面積
-            if ( dh > self.frame_diameter/2 ):
-                h = self.frame_diameter
-                area = math.pi*self.frame_diameter**2/4
-                s = math.pi*self.frame_diameter
-
-            elif (dh > 0):
-                temp_theta = np.arcsin(dh/(self.frame_diameter/2))
-                h = self.frame_diameter/2+dh
-                area = math.pi*self.frame_diameter**2/8+dh*self.frame_diameter*np.cos(temp_theta)/2+self.frame_diameter**2*temp_theta/4
-                s = math.pi*self.frame_diameter/2+self.frame_diameter*temp_theta
-
-            elif (dh > -self.frame_diameter/2):
-                temp_theta = np.arcsin(abs(dh)/(self.frame_diameter/2))
-                h = self.frame_diameter/2+dh
-                area = math.pi*self.frame_diameter**2/8-dh*self.frame_diameter*np.cos(temp_theta)/2-self.frame_diameter**2*temp_theta/4
-                s = math.pi*self.frame_diameter/2-self.frame_diameter*temp_theta  
-
-            else:
-                h = 0
-                area = 0
-                s = 0
-
-            # 浸沒體積
-            volume_in_water = math.pi*self.frame_diameter**2*element_length*2/4 # 有內框以及外框
-            # 流阻力受力面積
-            area_norm = self.frame_diameter*element_length*2      
-            area_tang = math.pi*self.frame_diameter*element_length*2
-
-            # 計算流阻力係數  依blevins經驗公式
-            afa = np.arccos( np.dot(relative_velocity_unit, relative_velocity_unit_tang) )
-            cd_norm = 1.2*(np.sin(afa))**2
-            cd_tang = 0.083*np.cos(afa)-0.035*(np.cos(afa))**2
-
-            if(afa > math.pi/2 ):  #??
-                afa = math.pi - afa
-                element_tang_unitvector = -element_tang_unitvector
-
-            # 流阻力 (計算切線及法線方向流阻力分量)
-            flow_resistance_force_tang = 0.5*self.OCEAN.water_density*cd_tang*area_tang*relative_velocity_abs**2*relative_velocity_unit_tang
-
-            flow_resistance_force_norm = 0.5*self.OCEAN.water_density*cd_norm*area_norm*relative_velocity_abs**2*relative_velocity_unit_norm
-            
-            self.flow_resistance_force[:, i] = 0.5*(flow_resistance_force_tang + flow_resistance_force_norm)
-            
-            # 慣性力
-            self.inertial_force[:, i] = self.OCEAN.water_density*self.intertia_coeff*volume_in_water*water_acceleration*0.5
-
-            if ( np.linalg.norm(water_acceleration) != 0):
-                self.added_mass_element[i] = 0.5*(self.intertia_coeff-1)*self.OCEAN.water_density*volume_in_water
-            else:
-                self.added_mass_element[i] = 0
-
-            # 浮力
-            self.buoyancy_force[:, i] = np.asarray([ 0,
-                                                     0,
-                                                     self.OCEAN.water_density*volume_in_water*self.OCEAN.gravity])
-
-            
-            # 重力
-            self.gravity_force[:, i] = np.asarray([ 0,
-                                                    0, 
-                                                    - self.element_mass*self.OCEAN.gravity])
-            
         # 質點總合力
         for i in range(self.num_node):
             
-            node_mass = 0
             element_index = self.get_element_index(i)
 
             for index in element_index:
+
+                self.node_mass[i] += ( self.element_mass + self.added_mass_element[index] )/2
 
                 self.pass_force[:,i] += (   
                                                self.flow_resistance_force[:, index]
@@ -301,55 +299,25 @@ class COLLAR(STRUCTURES):
                                             +  self.buoyancy_force[:, index]                
                                             +  self.gravity_force[:, index]
                                         )
+
+          
     # =======================================
     # 計算回傳速度、加速度
     # =======================================
     def cal_vel_acc(self):
 
-        connected_force = np.zeros((3,self.num_node))
-        self.node_force = np.zeros((3,self.num_node))
+        self.node_force = np.copy(self.pass_force)
 
         # 連結力
         for connection in self.connections:
             if connection["self_node_condition"] == 1:
-                connected_force[:, connection["self_node"]] += connection["connect_obj"].pass_force[:,connection['connect_obj_node']]
+                self.node_force[:, connection["self_node"]] += connection["connect_obj"].pass_force[:,connection['connect_obj_node']]
 
 
-        moment_global_axes = np.zeros(3)
-        total_force = np.zeros(3)
-        total_mass = 0
-
-
-        # 質點總合力
-        for i in range(self.num_node):
-            
-            node_mass = 0
-            element_index = self.get_element_index(i)
-
-            for index in element_index:
-
-                self.node_force[:,i] += (   
-                                               self.flow_resistance_force[:, index]
-                                            +  self.inertial_force[:, index] 
-                                            +  self.buoyancy_force[:, index]                
-                                            +  self.gravity_force[:, index]
-                                        )
-                
-                node_mass += self.added_mass_element[index]
-
-            self.node_force[:,i] = self.node_force[:,i]/len(element_index) + connected_force[:, i]
-
-
-            node_mass =  node_mass/len(element_index) + (self.element_mass)/2*2
-
-            moment_global_axes = moment_global_axes + np.cross( self.local_position_vectors[:,i], self.node_force[:,i] )
-
-            total_force = total_force + self.node_force[:,i]
-
-            total_mass = total_mass + node_mass
-
-        # ============================================
-
+        total_mass = np.sum(self.node_mass)
+        total_force = np.sum(self.node_force, axis=1)
+        
+        moment_global_axes = np.sum( np.cross( self.local_position_vectors.T, self.node_force.T ), axis=0)
         moment_local_axes = np.dot(self.coordinate_transfer_matrix, moment_global_axes)
 
 
@@ -376,7 +344,6 @@ class COLLAR(STRUCTURES):
         global_center_velocity_temp = np.copy(self.global_center_velocity)
 
         return global_center_velocity_temp[0:3], combine_center_acc_temp
-
 
     # =======================================
     # 質點 構件 關係

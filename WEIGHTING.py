@@ -40,7 +40,6 @@ class WEIGHTING(STRUCTURES):
         self.global_node_position = np.zeros((3, self.num_node))
         self.global_node_position[:, 0] = start_node
         self.global_node_velocity = np.zeros((3, self.num_node))
-        self.pass_force = np.zeros((3,self.num_node))
 
     # =======================================
     # 更新質點位置
@@ -80,8 +79,6 @@ class WEIGHTING(STRUCTURES):
     # =======================================
     def cal_element_force(self, present_time):
 
-        self.weight = self.mass*self.OCEAN.gravity 
-
         # 初始化流阻力、慣性力、浮力、重力、附加質量
         self.flow_resistance_force =  np.zeros((3,self.num_element))
         self.inertial_force =  np.zeros((3,self.num_element))
@@ -97,11 +94,12 @@ class WEIGHTING(STRUCTURES):
         for i in range(self.num_element):
             node_index = self.get_node_index(i)
             # 構件質心處海波流場
+
             water_velocity, water_acceleration = self.OCEAN.cal_wave_field(
-                                                (self.global_node_position[0, node_index[0]] + self.global_node_position[0, node_index[0]])/2,
-                                                (self.global_node_position[1, node_index[0]] + self.global_node_position[1, node_index[0]])/2,
-                                                (self.global_node_position[2, node_index[0]] + self.global_node_position[2, node_index[0]])/2,
-                                                present_time )
+                                                    (self.global_node_position[:, node_index[0]] + self.global_node_position[:, node_index[0]]).reshape(3,1) /2,
+                                                    present_time )
+            
+            water_velocity, water_acceleration = water_velocity.T[0], water_acceleration.T[0]
 
             # 構件與海水相對速度
             relative_velocity  = water_velocity - self.global_node_velocity[:,i]
@@ -207,7 +205,8 @@ class WEIGHTING(STRUCTURES):
             self.gravity_force[:, i] = np.asarray([ 0,
                                                     0, 
                                                     - self.element_mass[i]*self.OCEAN.gravity])
-            
+
+
        # 計算外傳力
         for i in range(self.num_node):
 

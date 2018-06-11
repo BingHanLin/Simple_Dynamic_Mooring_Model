@@ -73,7 +73,7 @@
         ],
 
             "InertiaCoefficient": 1,
-            "ClCable": 589116053.8,
+            "ClCable": 52375643.32,
             "MaterialDensity": 910,
             "MassPerMCable": 1.24,
             "DiameterCable": 0.05,
@@ -87,7 +87,7 @@
         ],
 
         "InertiaCoefficient": 1,
-        "ClCable": 688407585.8,
+        "ClCable": 52375643.32,
         "MaterialDensity": 1140,
         "MassPerMCable": 0.905,
         "DiameterCable": 0.038,
@@ -125,9 +125,9 @@
             "NAN"
         ],
 
-            "Mass": 1250,
+            "Mass": 2500,
             "Diameter": 1.1,
-            "Height":1.3,
+            "Height":2.6,
             "InertiaCoefficient":1.5
     }
 }

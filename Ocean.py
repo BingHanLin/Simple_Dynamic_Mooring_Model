@@ -1,7 +1,7 @@
 import json
 import math
 import numpy as np
-
+import pandas as pd
 class OCEAN:
     def __init__(self, filename):
 
@@ -63,43 +63,41 @@ class OCEAN:
     # =======================================
     # 計算波流場
     # =======================================
-    def cal_wave_field(self, xp, yp, zp, time, reduction = 1):
+    def cal_wave_field(self, node_position, time, reduction = 1):
+
+
+        phase = self.__kx*node_position[0,:] + self.__ky*node_position[1,:] - self.__sigma*time
         
-        phase = self.__kx*xp + self.__ky*yp - self.__sigma*time
-        
-        if  (self.__kx*xp < self.__sigma*time):
-            self.eta = 0.5*self.wave_height*math.sin(phase)
-        else:
-            self.eta = 0
+        self.eta = np.where(self.__kx*node_position[0,:] < self.__sigma*time, 0.5*self.wave_height*np.sin(phase) , 0) 
 
- 
-        if ( (self.__kx*xp < self.__sigma*time) and (self.eta > zp) ):
-        # if ( (self.eta > zp) ):
+        num_node = len(node_position[0,:])
+        water_velocity = np.zeros((3, num_node))
+        water_acc = np.zeros((3, num_node))
 
-            A = 0.5*self.wave_height*self.gravity/(self.__sigmae*math.cosh(self.__wk*self.water_depth))
 
-            wu = self.current_velocity_x*reduction+A*self.__kx*math.cosh(self.__wk*(self.water_depth+zp))*math.sin(phase)
-            wv = self.current_velocity_y*reduction+A*self.__ky*math.cosh(self.__wk*(self.water_depth+zp))*math.sin(phase)
-            ww = -A*self.__wk*math.sinh(self.__wk*(self.water_depth+zp))*math.cos(phase)	   
-            
-            wax = -self.__sigma*A*self.__kx*math.cosh(self.__wk*(self.water_depth+zp))*math.cos(phase)   
-            way = -self.__sigma*A*self.__ky*math.cosh(self.__wk*(self.water_depth+zp))*math.cos(phase)
-            waz = -self.__sigma*A*self.__wk*math.sinh(self.__wk*(self.water_depth+zp))*math.sin(phase)	
+        condition = ( (self.__kx*node_position[0,:] < self.__sigma*time) * (self.eta > node_position[2,:]) )
 
-        else:
 
-            wu=0
-            wv=0
-            ww=0
+        Amp = 0.5*self.wave_height*self.gravity/(self.__sigmae*math.cosh(self.__wk*self.water_depth))
 
-            wax=0
-            way=0
-            waz=0
+        # water_velocity[0,:] = np.where( condition , self.current_velocity_x*reduction+Amp*self.__kx*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.sin(phase) , 0)   
+        # water_velocity[1,:] = np.where( condition , self.current_velocity_y*reduction+Amp*self.__ky*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.sin(phase) , 0)   
+        # water_velocity[2,:] = np.where( condition , -Amp*self.__wk*np.sinh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase), 0) 
 
-        water_velocity = np.asarray([wu, wv, ww])
-        water_acceleration = np.asarray([wax, way, waz])
+        # water_acc[0,:] = np.where( condition , -self.__sigma*Amp*self.__kx*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase)    , 0)   
+        # water_acc[1,:] = np.where( condition , -self.__sigma*Amp*self.__ky*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase) , 0)   
+        # water_acc[2,:] = np.where( condition , -self.__sigma*Amp*self.__wk*np.sinh(self.__wk*(self.water_depth+node_position[2,:]))*np.sin(phase), 0) 
 
-        return water_velocity, water_acceleration
+        water_velocity[0,:] = self.current_velocity_x*reduction 
+        water_velocity[1,:] = self.current_velocity_y*reduction
+        water_velocity[2,:] = self.current_velocity_x*reduction
+
+        water_acc[0,:] = -self.__sigma*Amp*self.__kx*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase)   
+        water_acc[1,:] = -self.__sigma*Amp*self.__ky*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase)  
+        water_acc[2,:] = -self.__sigma*Amp*self.__wk*np.sinh(self.__wk*(self.water_depth+node_position[2,:]))*np.sin(phase)
+
+        return water_velocity, water_acc
+
 
     def plot_ocean(self, x_range, y_range, x_num, y_num, time, ax):
 
@@ -121,8 +119,30 @@ class OCEAN:
         ax.plot_surface(xv,yv, water_depth, linewidth=0)
 
 
+    def save_data_csv(self, present_time, DirName):
+        
+        FileName = './'+ DirName + '/' + 'ocean_data'+ str("%.5f" % (present_time))+'.csv'
+        
+        xv, yv = np.mgrid[-10:130:5, -10:30:5]
+        zv = np.zeros_like(xv)
+        pos = np.stack((xv.ravel(), yv.ravel(), zv.ravel()) )
+
+        self.cal_wave_field(pos, present_time, 0)
+
+        datadict = {}
+        datadict['x'] = xv.ravel()
+        datadict['y'] = yv.ravel()
+        datadict['eta'] = self.eta
+
+        # make dataframe
+        dataframe = pd.DataFrame(datadict)
+
+        dataframe.to_csv(FileName, sep=',', mode='a')
+
+
 
 if __name__ == "__main__":
+
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
 
@@ -132,10 +152,6 @@ if __name__ == "__main__":
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
-    oceana.plot_ocean([-10,130], [-10,30], 20, 10, 5, ax)
-    print (oceana.eta)
-    plt.show()
-    # print ('=============================================')
-    # oceana.plot_ocean([-5,30], [-15,15], 5, 5, 1, ax)
-    # print (oceana.cal_wave_field(0,1,-0.5,5))
+    water_velocity, water_acc = oceana.cal_wave_field(np.asarray([[10],[2],[-10]]),100)
+    print (water_velocity)
     # plt.show()

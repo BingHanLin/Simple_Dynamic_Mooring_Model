@@ -21,7 +21,7 @@ class CABLELINE(STRUCTURES):
     '''
     
     def __init__(self, name, filename, OCEAN, start_node, end_node, CABLETYPE):
-
+        np.seterr(divide='ignore', invalid='ignore') 
         
         with open(filename, 'r') as load_f:
             params_dict = json.load(load_f)
@@ -60,6 +60,14 @@ class CABLELINE(STRUCTURES):
         # global position, velocity, force of nodes
         self.global_node_position = np.zeros((3, self.num_node))
         self.global_node_velocity = np.zeros((3, self.num_node))
+
+        self.node_mass = np.zeros(self.num_node)
+
+        # 初始化浮力、重力
+        self.buoyancy_force =  np.zeros((3,self.num_element))
+        self.gravity_force =  np.zeros((3,self.num_element))
+
+        # 初始化外傳力
         self.pass_force = np.zeros((3,self.num_node))
 
         for i in range(self.num_node):
@@ -91,7 +99,6 @@ class CABLELINE(STRUCTURES):
 
         return cd_tang, cd_norm
 
-
     # =======================================
     # Runge Kutta 4th 更新質點位置
     # =======================================
@@ -114,8 +121,8 @@ class CABLELINE(STRUCTURES):
     # =======================================  
     def cal_node_pos_vel(self, global_node_position_temp, global_node_velocity_temp):
         
-        self.global_node_position = global_node_position_temp
-        self.global_node_velocity = global_node_velocity_temp
+        self.global_node_position = np.copy(global_node_position_temp)
+        self.global_node_velocity = np.copy(global_node_velocity_temp)
         
         for connection in self.connections:
             if connection["connect_obj_node_condition"] == 1:
@@ -129,108 +136,78 @@ class CABLELINE(STRUCTURES):
     # =======================================
     # 計算構件受力
     # =======================================
+
     def cal_element_force(self, present_time):
 
-        # 初始化流阻力、慣性力、浮力、重力、附加質量
-        self.tension_force = np.zeros((3,self.num_element))
-        self.flow_resistance_force =  np.zeros((3,self.num_element))
-        self.inertial_force =  np.zeros((3,self.num_element))
-        self.buoyancy_force =  np.zeros((3,self.num_element))
-        self.gravity_force =  np.zeros((3,self.num_element))
-        self.added_mass_element = np.zeros(self.num_element)
+        # 迭代構件
+        node_index = np.asarray(list( map(self.get_node_index, range(self.num_element))))
 
-        # 初始化外傳力
-        self.pass_force = np.zeros((3,self.num_node))
+        center_position = 0.5*( self.global_node_position[:,node_index[:,0]] + self.global_node_position[:,node_index[:,1]] )
 
+        water_velocity, water_acceleration = self.OCEAN.cal_wave_field(center_position, present_time)
 
-        # 迭代構件，計算構件上力
-        for i in range(self.num_element):
+        relative_velocity = water_velocity - 0.5*( self.global_node_velocity[:,node_index[:,0]] + self.global_node_velocity[:,node_index[:,1]] )
+        
+        # 構件切線向量
+        element_tang_vecotr = self.global_node_position[:,node_index[:,1]] - self.global_node_position[:,node_index[:,0]]
 
-            node_index = self.get_node_index(i)
-            
-            # 構件質心處海波流場
-            water_velocity, water_acceleration = self.OCEAN.cal_wave_field(
-                                                    (self.global_node_position[0, node_index[0]] + self.global_node_position[0, node_index[1]])/2,
-                                                    (self.global_node_position[1, node_index[0]] + self.global_node_position[1, node_index[1]])/2,
-                                                    (self.global_node_position[2, node_index[0]] + self.global_node_position[2, node_index[1]])/2,
-                                                    present_time )
+        relative_velocity_abs = np.sum(np.abs(relative_velocity)**2,axis=0)**(1./2)
+        relative_velocity_unit = np.where(relative_velocity_abs != 0, relative_velocity / relative_velocity_abs, 0) 
 
-            # 構件與海水相對速度
-            relative_velocity  = water_velocity - 0.5*(self.global_node_velocity[:,node_index[0]] + self.global_node_velocity[:,node_index[1]])
-            relative_velocity_abs = np.linalg.norm(relative_velocity)
+        element_length = np.sum(np.abs(element_tang_vecotr)**2,axis=0)**(1./2)
+        element_tang_unitvector  = np.where(element_length != 0, element_tang_vecotr / element_length, 0) 
 
-            if relative_velocity_abs == 0:
-                relative_velocity_unit = np.zeros(3)
-            else:
-                relative_velocity_unit = relative_velocity / relative_velocity_abs
-                
-            # 構件切線向量
-            element_tang_vecotr =  [ self.global_node_position[0, node_index[1]] - self.global_node_position[0, node_index[0]],
-                                     self.global_node_position[1, node_index[1]] - self.global_node_position[1, node_index[0]],
-                                     self.global_node_position[2, node_index[1]] - self.global_node_position[2, node_index[0]] ]
+        # 構件單位切線相對速度
+        relative_velocity_tang  = np.sum(element_tang_unitvector*relative_velocity,axis=0)*element_tang_unitvector
+        relative_velocity_tang_abs = np.sum(np.abs(relative_velocity_tang)**2,axis=0)**(1./2)
 
-            element_length = np.linalg.norm(element_tang_vecotr)
-            element_tang_unitvector = element_tang_vecotr / element_length
+        # 構件單位法線相對速度
+        relative_velocity_norm  = relative_velocity - relative_velocity_tang
+        relative_velocity_norm_abs = np.sum(np.abs(relative_velocity_norm)**2,axis=0)**(1./2)
 
-            # 構件單位切線相對速度
-            relative_velocity_tang  = np.dot(element_tang_unitvector,relative_velocity)*element_tang_unitvector
-            relative_velocity_tang_abs = np.linalg.norm(relative_velocity_tang)
+        Re_tang = relative_velocity_tang_abs*self.cable_diameter/self.OCEAN.water_viscosity
+        Re_norm = relative_velocity_norm_abs*self.cable_diameter/self.OCEAN.water_viscosity
 
-            # 構件單位法線相對速度
-            relative_velocity_norm = relative_velocity - relative_velocity_tang
-            relative_velocity_norm_abs = np.linalg.norm(relative_velocity_norm)
+        # 計算cd
+        cd = np.asarray(list( map(self.cal_cd, Re_tang, Re_norm)))
+        cd_tang = cd[:,0]
+        cd_norm = cd[:,1]
 
-            Re_tang = relative_velocity_tang_abs*self.cable_diameter/self.OCEAN.water_viscosity
-            Re_norm = relative_velocity_norm_abs*self.cable_diameter/self.OCEAN.water_viscosity
+        area_norm = self.cable_diameter*element_length   
+        area_tang = self.cable_diameter*element_length
 
-            cd_tang, cd_norm = self.cal_cd(Re_tang, Re_norm)
+        epsolon = (element_length - self.origin_element_length) / self.origin_element_length
+        epsolon_matrix = np.where( epsolon>0, epsolon, 0)
 
-            area_norm = self.cable_diameter*element_length    
-            area_tang = self.cable_diameter*element_length
+        water_acceleration_abs = np.sum(np.abs(water_acceleration)**2,axis=0)**(1./2)
+        judge_water_acceleration = np.where( water_acceleration_abs==0, 1, 0)
 
- 
-            # 流阻力 (計算切線及法線方向流阻力分量)
-            flow_resistance_force_tang =  0.5*self.OCEAN.water_density*cd_tang*area_tang*relative_velocity_tang_abs*relative_velocity_tang
+        # =============================流阻力 (計算切線及法線方向流阻力分量) ===========================================
+        self.flow_resistance_force = ( 0.5*self.OCEAN.water_density*relative_velocity_tang*(cd_tang*area_tang*relative_velocity_tang_abs) + 
+                                       0.5*self.OCEAN.water_density*relative_velocity_norm*(cd_norm*area_norm*relative_velocity_norm_abs) )
 
-            flow_resistance_force_norm =  0.5*self.OCEAN.water_density*cd_norm*area_norm*relative_velocity_norm_abs*relative_velocity_norm
+        # =========================================== 慣性力 ===========================================
+        volume_in_water = self.mass_per_length*element_length/self.density 
+        self.inertial_force = self.OCEAN.water_density*self.intertia_coeff*water_acceleration*volume_in_water
 
-            self.flow_resistance_force[:, i] = flow_resistance_force_tang + flow_resistance_force_norm
-            
-            # 慣性力
-            volume_in_water = self.mass_per_length*element_length/self.density 
+        # ===========================================  附加質量 =========================================== 
+        self.added_mass_element = (self.intertia_coeff-1)*self.OCEAN.water_density*volume_in_water*judge_water_acceleration
 
-            self.inertial_force[:, i] = self.OCEAN.water_density*self.intertia_coeff*volume_in_water*water_acceleration*0.5
+        # ===========================================  浮力 =========================================== 
+        self.buoyancy_force[2, :] = self.OCEAN.water_density*volume_in_water*self.OCEAN.gravity
+
+        # ===========================================  重力 =========================================== 
+        self.element_mass = self.mass_per_length*element_length
+        self.gravity_force[2, :] = - self.element_mass*self.OCEAN.gravity
+
+        # ===========================================  張力 =========================================== 
+        self.tension_force = (0.25*math.pi*self.cable_diameter**2)*self.cable_strength*self.OCEAN.gravity*element_tang_unitvector*epsolon_matrix
 
 
-            if ( np.linalg.norm(water_acceleration) != 0):
-                self.added_mass_element[i] = 0.5*(self.intertia_coeff-1)*self.OCEAN.water_density*volume_in_water
-            else:
-                self.added_mass_element[i] = 0
+        # 計算外傳力 (注意張力方向)
+        self.node_mass.fill(0)
+        self.pass_force.fill(0)
 
-
-            # 浮力
-            self.buoyancy_force[:, i] = np.asarray([    0,
-                                                        0,
-                                                        self.OCEAN.water_density*volume_in_water*self.OCEAN.gravity])
-
-            
-            # 重力
-            self.element_mass[i] = self.mass_per_length*element_length
-            self.gravity_force[:, i] = np.asarray([   0,
-                                                      0, 
-                                                      -self.element_mass[i]*self.OCEAN.gravity])
-
-
-            # 張力
-            epsolon = (element_length - self.origin_element_length) / self.origin_element_length
-
-            if epsolon > 0:
-                self.tension_force[:, i] = (0.25*math.pi*self.cable_diameter**2)*self.cable_strength*epsolon*self.OCEAN.gravity*element_tang_unitvector
-            else:
-                self.tension_force[:, i] = np.zeros(3)
-
-
-       # 計算外傳力 (注意張力方向)
         for i in range(self.num_node):
 
             if i == 0:
@@ -242,6 +219,8 @@ class CABLELINE(STRUCTURES):
 
             for index in element_index:
                 sign *= -1
+                
+                self.node_mass[i] += ( self.element_mass[index] + self.added_mass_element[index] )/2
 
                 self.pass_force[:, i] += (   
                                               self.flow_resistance_force[:, index]/2
@@ -249,45 +228,26 @@ class CABLELINE(STRUCTURES):
                                             + self.buoyancy_force[:, index]/2                                  
                                             + self.gravity_force[:, index]/2
                                             + self.tension_force[:, index]*sign   
-                                             )
-        
-
+                                         )
 
     # =======================================
     # 計算回傳速度、加速度
     # =======================================
     def cal_vel_acc(self):
 
-
-        self.node_force = np.zeros((3,self.num_node))
-        node_mass = np.zeros(self.num_node)
-        global_node_acc_temp = np.zeros((3,self.num_node))
-        connected_force = np.zeros((3,self.num_node))
+        # 質點總合力
+        self.node_force = np.copy(self.pass_force)
 
         # 連結力
+
         for connection in self.connections:
             if connection["self_node_condition"] == 1:
-                connected_force[:, connection["self_node"]] += connection["connect_obj"].pass_force[:,connection['connect_obj_node']]
+                self.node_force[:, connection["self_node"]] += connection["connect_obj"].pass_force[:,connection['connect_obj_node']]
 
 
-        # 質點總合力及加速度 (注意張力方向)
-        for i in range(self.num_node):
 
-            element_index = self.get_element_index(i)
-
-            for index in element_index:
-
-                node_mass[i] += ( self.element_mass[index] + self.added_mass_element[index] )/2
-
-            self.node_force[:, i] = self.pass_force[:, i] + connected_force[:,i]
-
-
-            if (node_mass[i] == 0):
-                global_node_acc_temp[:,i] = 0
-            else:
-                global_node_acc_temp[:,i] = self.node_force[:,i]/node_mass[i]
-
-
+        # 加速度
+        global_node_acc_temp = np.where(self.node_mass == 0, 0,  self.node_force / self.node_mass)
 
         global_node_velocity_temp = np.copy(self.global_node_velocity)
 

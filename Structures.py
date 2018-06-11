@@ -41,6 +41,7 @@ class STRUCTURES():
     @classmethod 
     def runge_kutta_4(cls, present_time, dt):
 
+
         # 1
         for obj in cls.getinstances():
 
@@ -62,7 +63,8 @@ class STRUCTURES():
 
         for obj in cls.getinstances():
             obj.pk, obj.vk = obj.cal_vel_acc()
-            obj.pk_sum, obj.vk_sum = obj.pk, obj.vk
+            obj.pk_sum, obj.vk_sum = np.copy(obj.pk), np.copy(obj.vk)
+
 
         # 2
         for obj in cls.getinstances():
@@ -76,6 +78,7 @@ class STRUCTURES():
             obj.pk, obj.vk = obj.cal_vel_acc()
             obj.pk_sum, obj.vk_sum = obj.pk_sum + 2*obj.pk, obj.vk_sum + 2*obj.vk
 
+
         # 3
         for obj in cls.getinstances():
             obj.cal_node_pos_vel( obj.new_rk4_position + 0.5*obj.pk*dt, 
@@ -87,6 +90,7 @@ class STRUCTURES():
         for obj in cls.getinstances():
             obj.pk, obj.vk = obj.cal_vel_acc()
             obj.pk_sum, obj.vk_sum = obj.pk_sum + 2*obj.pk, obj.vk_sum + 2*obj.vk
+
 
 
         # 4
@@ -103,8 +107,9 @@ class STRUCTURES():
 
 
         for obj in cls.getinstances():
-            obj.new_rk4_position  = obj.new_rk4_position + dt*obj.pk_sum / 6
+            obj.new_rk4_position =  obj.new_rk4_position + dt*obj.pk_sum / 6
             obj.new_rk4_velocity =  obj.new_rk4_velocity + dt*obj.vk_sum / 6
+
 
     # =======================================
     # 增加質點關聯
@@ -184,6 +189,8 @@ class STRUCTURES():
         
         FileName = './'+ DirName + '/' + 'element_data'+ str("%.5f" % (present_time))+'.csv'
 
+
+        # \\\加速
         node_index_list = []
         for i in range(self.num_element):
             node_index = self.get_node_index(i)
