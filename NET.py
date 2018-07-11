@@ -303,7 +303,7 @@ class NET(STRUCTURES):
         self.gravity_force[2, :] = -self.net_mesh_mass*self.OCEAN.gravity
 
 
-
+        self.tension_force.fill(0)
         # 張力    
         for i in range(self.num_element):
 
@@ -311,9 +311,8 @@ class NET(STRUCTURES):
             node_index = self.get_node_index(i)
 
             # 構件切線向量
-            element_tang_vecotr =  [ self.global_node_position[0, node_index[1]] - self.global_node_position[0, node_index[0]],
-                                     self.global_node_position[1, node_index[1]] - self.global_node_position[1, node_index[0]],
-                                     self.global_node_position[2, node_index[1]] - self.global_node_position[2, node_index[0]] ]
+            element_tang_vecotr =  self.global_node_position[:,node_index[1]] - self.global_node_position[:,node_index[0]]
+
 
             element_length = np.linalg.norm(element_tang_vecotr)
             element_tang_unitvector = element_tang_vecotr / element_length
@@ -322,22 +321,25 @@ class NET(STRUCTURES):
 
 
             if epsolon > 0:
+                #上 下
                 if i < self.lat_num or i >= (self.num_element - self.lat_num):
                     self.tension_force[:, i] = 0.5*self.net_mesh_line_lat[net_mesh_index[0]]*(0.25*math.pi*self.cable_diameter**2)*self.cable_strength*epsolon*self.OCEAN.gravity*element_tang_unitvector
+    
 
+                #左 右
                 elif len(net_mesh_index) == 1:
                     self.tension_force[:, i] = 0.5*self.net_mesh_line_lon[net_mesh_index[0]]*(0.25*math.pi*self.cable_diameter**2)*self.cable_strength*epsolon*self.OCEAN.gravity*element_tang_unitvector
 
+                # 內部橫
                 elif (i+1) % (2*self.lat_num + 1) <= self.lat_num:
                     num_line = self.net_mesh_line_lat[net_mesh_index[0]] + self.net_mesh_line_lat[net_mesh_index[1]]
                     self.tension_force[:, i] = 0.5*num_line*(0.25*math.pi*self.cable_diameter**2)*self.cable_strength*epsolon*self.OCEAN.gravity*element_tang_unitvector
 
+                # 內部豎
                 else:
                     num_line = self.net_mesh_line_lon[net_mesh_index[0]] + self.net_mesh_line_lon[net_mesh_index[1]]
                     self.tension_force[:, i] = 0.5*num_line*(0.25*math.pi*self.cable_diameter**2)*self.cable_strength*epsolon*self.OCEAN.gravity*element_tang_unitvector
 
-            else:
-                self.tension_force[:, i] = np.zeros(3)
 
 
         # 計算外傳力 (注意張力方向)
@@ -357,29 +359,37 @@ class NET(STRUCTURES):
                                             + self.buoyancy_force[:, index]                                  
                                             + self.gravity_force[:, index] 
                                             )/4
+
                 self.node_mass[i] += ( self.net_mesh_mass[index] + self.added_mass_element[index] )/4
 
+           
             # 構件上
+
+            # 右上
             if i == self.lat_num:
                 sign = -1
                 for index in element_index:
                     self.pass_force[:, i] += sign*self.tension_force[:, index]
                     sign = sign*(-1)
 
+            # 左下
             elif i == (self.num_node - 1 - self.lat_num):
                 sign = -1
                 for index in element_index:
                     self.pass_force[:, i] += sign*self.tension_force[:, index]
                     sign = sign*(-1)
 
+            # 右下
             elif i == (self.num_node-1):   
                 for index in element_index:
                     self.pass_force[:, i] += -self.tension_force[:, index]
 
+            # 左上
             elif i == 0 :   
                 for index in element_index:
                     self.pass_force[:, i] += self.tension_force[:, index]
-            
+
+            # 上
             elif i <= self.lat_num: 
                 sign =[-1, 1, 1]
                 sign_index = 0  
@@ -387,26 +397,31 @@ class NET(STRUCTURES):
                     self.pass_force[:, i] += sign[sign_index]*self.tension_force[:, index]
                     sign_index =  sign_index + 1
 
+            # 下
             elif i >= self.num_node - self.lat_num: 
-                sign =[1, -1, 1]
+                sign =[-1, -1, 1]
                 sign_index = 0  
                 for index in element_index:
                     self.pass_force[:, i] += sign[sign_index]*self.tension_force[:, index]
                     sign_index =  sign_index + 1
 
+            # 左
             elif (i+1) % (self.lat_num+1) == 1 : 
                 sign =[-1, 1, 1]
                 sign_index = 0  
                 for index in element_index:
                     self.pass_force[:, i] += sign[sign_index]*self.tension_force[:, index]
                     sign_index =  sign_index + 1
-                     
+
+            # 右      
             elif (i+1) % (self.lat_num+1) == 0 :   
                 sign =[-1, -1, 1]
                 sign_index = 0  
                 for index in element_index:
                     self.pass_force[:, i] += sign[sign_index]*self.tension_force[:, index]
                     sign_index =  sign_index + 1
+
+            # 內    
             else:
                 sign =[ -1, -1, 1, 1]
                 sign_index = 0  

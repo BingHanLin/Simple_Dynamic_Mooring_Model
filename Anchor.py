@@ -107,7 +107,7 @@ class ANCHOR(STRUCTURES):
         global_node_velocity_temp = np.zeros((3,self.num_node))
 
         return global_node_velocity_temp, global_node_acc_temp
-
+ 
 
     # =======================================
     # 質點 構件 關係

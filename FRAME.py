@@ -237,13 +237,13 @@ class FRAME(STRUCTURES):
             skin_surface = math.pi*self.element_diameter
 
         elif (delta_h > 0):
-            temp_theta = math.arcsin(delta_h/(self.element_diameter/2))
+            temp_theta = math.asin(delta_h/(self.element_diameter/2))
             under_water_height = self.element_diameter/2+delta_h
             section_area = math.pi*self.element_diameter**2/8+delta_h*self.element_diameter*math.cos(temp_theta)/2+self.element_diameter**2*temp_theta/4
             skin_surface = math.pi*self.element_diameter/2+self.element_diameter*temp_theta
 
         elif (delta_h > -self.element_diameter/2):
-            temp_theta = math.arcsin(abs(delta_h)/(self.element_diameter/2))
+            temp_theta = math.asin(abs(delta_h)/(self.element_diameter/2))
             under_water_height = self.element_diameter/2+delta_h
             section_area = math.pi*self.element_diameter**2/8-delta_h*self.element_diameter*math.cos(temp_theta)/2-self.element_diameter**2*temp_theta/4
             skin_surface = math.pi*self.element_diameter/2-self.element_diameter*temp_theta  
