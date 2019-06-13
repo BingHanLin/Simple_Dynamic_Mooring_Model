@@ -19,15 +19,13 @@
                 "WaterViscosity": 0.000001,
                 "InWaveAngle": 0,
                 "InCurrentAngle": 0,
-                "InCurrentVel": 1.0
+                "InCurrentVel": 0.0
             },
 
     "COLLAR":{
                 "comment":
                 [
-                "FloatingTyoe 0:floating, 1:sinking",
-                "Outter circumference of collar (m)",
-                "Inner circumference of collar (m)",
+                "Radius of collar (m)",
                 "Diameter of collar tube (m)",
                 "Thickness of collar tube (m)",
                 "Density of material (kg/m^3)",
@@ -36,9 +34,7 @@
                 "Other mass of equipment (kg)"
                 ],
 
-                "FloatingType": 0,
-                "OutterCircumference": 36.0,
-                "InnerCircumference": 32.0,
+                "CollarRadius": 10.0,
                 "TubeDiameter": 0.2,
                 "TubeThickness": 0.015,
                 "MaterialDensity": 1000,
@@ -69,15 +65,15 @@
             "Density of material (kg/m^3)",
             "Inertia coefficient Cm = 1 + Ca",
             "Chain mass per meter (kg)",
-            "Number of Elements"
+            "Number of Elements                       52375643.32"
         ],
 
             "InertiaCoefficient": 1,
             "ClCable": 52375643.32,
             "MaterialDensity": 910,
             "MassPerMCable": 1.24,
-            "DiameterCable": 0.05,
-            "Elements": 12
+            "DiameterCable": 0.038,
+            "Elements": 10
 
     },
 

@@ -2,7 +2,8 @@ import json
 import math
 import numpy as np
 import pandas as pd
-class OCEAN:
+
+class Ocean:
     def __init__(self, filename):
 
         with open(filename,'r') as load_f:
@@ -80,21 +81,14 @@ class OCEAN:
 
         Amp = 0.5*self.wave_height*self.gravity/(self.__sigmae*math.cosh(self.__wk*self.water_depth))
 
-        # water_velocity[0,:] = np.where( condition , self.current_velocity_x*reduction+Amp*self.__kx*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.sin(phase) , 0)   
-        # water_velocity[1,:] = np.where( condition , self.current_velocity_y*reduction+Amp*self.__ky*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.sin(phase) , 0)   
-        # water_velocity[2,:] = np.where( condition , -Amp*self.__wk*np.sinh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase), 0) 
+        water_velocity[0,:] = np.where( condition , self.current_velocity_x*reduction+Amp*self.__kx*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.sin(phase) , 0)   
+        water_velocity[1,:] = np.where( condition , self.current_velocity_y*reduction+Amp*self.__ky*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.sin(phase) , 0)   
+        water_velocity[2,:] = np.where( condition , -Amp*self.__wk*np.sinh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase), 0) 
 
-        # water_acc[0,:] = np.where( condition , -self.__sigma*Amp*self.__kx*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase)    , 0)   
-        # water_acc[1,:] = np.where( condition , -self.__sigma*Amp*self.__ky*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase) , 0)   
-        # water_acc[2,:] = np.where( condition , -self.__sigma*Amp*self.__wk*np.sinh(self.__wk*(self.water_depth+node_position[2,:]))*np.sin(phase), 0) 
-
-        water_velocity[0,:] = self.current_velocity_x*reduction 
-        water_velocity[1,:] = self.current_velocity_y*reduction
-        water_velocity[2,:] = self.current_velocity_x*reduction
-
-        water_acc[0,:] = -self.__sigma*Amp*self.__kx*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase)   
-        water_acc[1,:] = -self.__sigma*Amp*self.__ky*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase)  
-        water_acc[2,:] = -self.__sigma*Amp*self.__wk*np.sinh(self.__wk*(self.water_depth+node_position[2,:]))*np.sin(phase)
+        water_acc[0,:] = np.where( condition , -self.__sigma*Amp*self.__kx*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase)    , 0)   
+        water_acc[1,:] = np.where( condition , -self.__sigma*Amp*self.__ky*np.cosh(self.__wk*(self.water_depth+node_position[2,:]))*np.cos(phase) , 0)   
+        water_acc[2,:] = np.where( condition , -self.__sigma*Amp*self.__wk*np.sinh(self.__wk*(self.water_depth+node_position[2,:]))*np.sin(phase), 0) 
+        
 
         return water_velocity, water_acc
 
