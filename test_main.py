@@ -24,7 +24,7 @@ model.add(CableLine("MainRope", [60.2, 0, -20], [60.2, 0, -4], "CABLE"))
 # model.add(CableLine("MainRope1", [60.2, 0, -10], [60.2, 0, -1], "CABLE"))
 model.add(Anchor("Anchor", [60.2, 0, -20]))
 model.add(Collar("Collar", [60.2, 0, -4]))
-
+  
 model.connect(["MainRope",0, 0], ["Anchor", 1, 0])
 # model.connect(["MainRope", 1], ["MainRope1", 0])
 model.connect(["MainRope", 0], ["Collar", 1])
