@@ -3,6 +3,7 @@ import numpy as np
 # ==============================================================================
 # Runge Kutta 4th 更新質點位置
 # ==============================================================================
+# http://physics.bu.edu/py502/lectures3/cmotion.pdf
 def runge_kutta4(object_list, present_time, dt, ocean_data):
 
     dt_list = [0*dt, 0.5*dt, 0.5*dt, 1*dt]
